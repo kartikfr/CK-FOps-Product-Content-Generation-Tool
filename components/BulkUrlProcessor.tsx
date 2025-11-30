@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import * as mammoth from 'mammoth';
 import { BulkJobItem, SampleFile } from '../types';
 import { scrapeUrl } from '../services/scraperService';
 import { transformContent } from '../services/geminiService';
@@ -74,6 +75,24 @@ export const BulkUrlProcessor: React.FC = () => {
   const handleSampleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // DOCX Handler
+    if (file.name.endsWith('.docx')) {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const arrayBuffer = evt.target?.result;
+        if (arrayBuffer && arrayBuffer instanceof ArrayBuffer) {
+           try {
+             const result = await mammoth.extractRawText({ arrayBuffer });
+             setSampleFile({ name: file.name, content: result.value, type: 'docx' });
+           } catch (err) {
+             console.error("Failed to parse docx", err);
+           }
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -243,7 +262,7 @@ export const BulkUrlProcessor: React.FC = () => {
                 <div className={`relative group ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                     <input 
                         type="file" 
-                        accept=".xlsx,.xls,.csv,.txt,.json"
+                        accept=".xlsx,.xls,.csv,.txt,.json,.docx"
                         onChange={handleSampleFileUpload}
                         disabled={isProcessing}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -265,6 +284,7 @@ export const BulkUrlProcessor: React.FC = () => {
                              </div>
                          )}
                     </div>
+                    <p className="text-[10px] text-slate-400 mt-1 ml-1">Supports DOCX, Excel, CSV, JSON</p>
                 </div>
             </div>
 

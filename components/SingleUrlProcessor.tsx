@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
+import * as mammoth from 'mammoth';
 import { scrapeUrl } from '../services/scraperService';
 import { transformContent } from '../services/geminiService';
 import { ScrapedContent, PromptTemplate, SampleFile } from '../types';
-import { Loader2, ArrowRight, CheckCircle2, AlertCircle, Copy, FileCode, RefreshCw, Upload, FileSpreadsheet, X, FileText } from 'lucide-react';
+import { Loader2, ArrowRight, CheckCircle2, AlertCircle, Copy, FileCode, RefreshCw, Upload, FileSpreadsheet, X, FileText, FileType } from 'lucide-react';
 
 const PROMPT_TEMPLATES: PromptTemplate[] = [
   { id: '1', name: 'Summarize', description: 'Create a concise executive summary', prompt: 'Create a 3-paragraph executive summary highlighting key points, main arguments, and conclusions.' },
@@ -48,6 +49,30 @@ export const SingleUrlProcessor: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // DOCX Handler
+    if (file.name.endsWith('.docx')) {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const arrayBuffer = evt.target?.result;
+        if (arrayBuffer && arrayBuffer instanceof ArrayBuffer) {
+          try {
+             const result = await mammoth.extractRawText({ arrayBuffer });
+             setSampleFile({
+               name: file.name,
+               content: result.value,
+               type: 'docx'
+             });
+          } catch (err) {
+             console.error("Failed to parse docx", err);
+             setError("Failed to read .docx file. Please ensure it is a valid Word document.");
+          }
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    // Existing Binary/Text Handler
     const reader = new FileReader();
     reader.onload = (evt) => {
       const bstr = evt.target?.result;
@@ -116,12 +141,12 @@ export const SingleUrlProcessor: React.FC = () => {
     navigator.clipboard.writeText(result);
   };
 
-  const downloadResult = () => {
+  const downloadTextResult = () => {
      const blob = new Blob([result], { type: 'text/plain' });
      const url = window.URL.createObjectURL(blob);
      const a = document.createElement('a');
      a.href = url;
-     // Attempt to detect extension from sample file or prompt
+     
      let ext = 'txt';
      if (sampleFile?.name.endsWith('.csv') || prompt.toLowerCase().includes('csv')) ext = 'csv';
      else if (sampleFile?.name.endsWith('.json') || prompt.toLowerCase().includes('json')) ext = 'json';
@@ -131,11 +156,24 @@ export const SingleUrlProcessor: React.FC = () => {
      window.URL.revokeObjectURL(url);
   };
 
+  const downloadExcelResult = () => {
+      // Create a simple one-row Excel file with the result
+      const wb = XLSX.utils.book_new();
+      const wsData = [
+          ["URL", "Title", "Transformed Output"],
+          [url, scrapedData?.title || 'No Title', result]
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      
+      // Attempt to auto-size columns
+      ws['!cols'] = [{ wch: 40 }, { wch: 30 }, { wch: 100 }];
+      
+      XLSX.utils.book_append_sheet(wb, ws, "Result");
+      XLSX.writeFile(wb, `${scrapedData?.title || 'Result'}.xlsx`);
+  };
+
   const downloadDoc = () => {
       const filename = `${scrapedData?.title || 'Transformed_Content'}.doc`;
-      
-      // Since result is now "Clean Text", we simply format line breaks and headers
-      // based on simple capitalization or spacing heuristics
       
       const lines = result.split('\n');
       let htmlBody = "";
@@ -144,14 +182,11 @@ export const SingleUrlProcessor: React.FC = () => {
           const trimmed = line.trim();
           if (!trimmed) return;
           
-          // Simple heuristic: If line is short, uppercase, and no colon, treat as Header
-          // Or if the line starts with a common header-like pattern
           if (trimmed.length < 50 && trimmed === trimmed.toUpperCase() && !trimmed.includes(':')) {
                htmlBody += `<h2>${trimmed}</h2>`;
           } else if (trimmed.startsWith('- ') || trimmed.startsWith('• ')) {
                htmlBody += `<li>${trimmed.substring(2)}</li>`;
           } else if (trimmed.includes(':')) {
-               // Bold the key part "Key: Value" -> "<b>Key:</b> Value"
                const parts = trimmed.split(':');
                if (parts.length > 1) {
                    const key = parts[0];
@@ -257,12 +292,12 @@ export const SingleUrlProcessor: React.FC = () => {
                     <h3 className="font-semibold text-slate-700">1. Sample Output File</h3>
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Recommended</span>
                 </div>
-                <p className="text-xs text-slate-500 mb-2">Upload a file (Excel/CSV) showing exactly how you want the output format.</p>
+                <p className="text-xs text-slate-500 mb-2">Upload a file (DOCX/Excel/CSV) showing exactly how you want the output format.</p>
                 
                 <div className="relative group">
                     <input 
                         type="file" 
-                        accept=".xlsx,.xls,.csv,.txt,.json"
+                        accept=".xlsx,.xls,.csv,.txt,.json,.docx"
                         onChange={handleSampleFileUpload}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     />
@@ -335,16 +370,22 @@ export const SingleUrlProcessor: React.FC = () => {
                    <RefreshCw size={18} /> New
                 </button>
                 <button 
+                  onClick={downloadExcelResult}
+                  className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg flex items-center gap-2 transition-colors font-medium shadow-sm"
+                >
+                   <FileSpreadsheet size={18} /> Download Excel
+                </button>
+                <button 
                   onClick={downloadDoc}
                   className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg flex items-center gap-2 transition-colors font-medium shadow-sm"
                 >
                    <FileText size={18} /> Download .doc
                 </button>
                  <button 
-                  onClick={downloadResult}
+                  onClick={downloadTextResult}
                   className="px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg flex items-center gap-2 transition-colors font-medium"
                 >
-                   <Upload size={18} className="rotate-180"/> Text File
+                   <FileType size={18}/> Text File
                 </button>
                 <button 
                   onClick={copyToClipboard}

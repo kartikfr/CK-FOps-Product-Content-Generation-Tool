@@ -1,10 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize the client. 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // Using Gemini 2.5 Flash - The current state-of-the-art for high-speed, high-accuracy text processing.
 const MODEL_NAME = 'gemini-2.5-flash';
+
+/**
+ * Helper to get the Gemini Client, prioritizing the user's local key.
+ */
+const getGenAIClient = () => {
+  const userKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_api_key') : null;
+  const apiKey = userKey || process.env.API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("Gemini API Key is missing. Please set it in the Settings.");
+  }
+  
+  return new GoogleGenAI({ apiKey });
+};
 
 /**
  * Uses Gemini with Google Search grounding to simulate a web scrape.
@@ -12,6 +23,7 @@ const MODEL_NAME = 'gemini-2.5-flash';
  */
 export const scrapeContentWithGenAI = async (url: string): Promise<string> => {
   try {
+    const ai = getGenAIClient();
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: `
@@ -42,6 +54,10 @@ export const scrapeContentWithGenAI = async (url: string): Promise<string> => {
     return response.text || "Unable to extract content from this URL. It may be blocked or not indexed.";
   } catch (error: any) {
     console.error("Gemini Scraping Error:", error);
+    // Provide a more helpful error if it's likely an auth issue
+    if (error.message?.includes('API key')) {
+        return "Error: Invalid or missing API Key. Please check your settings.";
+    }
     return `Error accessing page: ${error.message}. Please check the URL.`;
   }
 };
@@ -53,6 +69,7 @@ export const transformContent = async (
   modelName: string = MODEL_NAME
 ): Promise<string> => {
   try {
+    const ai = getGenAIClient();
     let transformationInstructions = "";
     
     // Check if the user specifically asked for Markdown

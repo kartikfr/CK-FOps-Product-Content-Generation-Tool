@@ -45,5 +45,5 @@ export interface PromptTemplate {
 export interface SampleFile {
   name: string;
   content: string;
-  type: 'csv' | 'json' | 'text' | 'excel';
+  type: 'csv' | 'json' | 'text' | 'excel' | 'docx';
 }

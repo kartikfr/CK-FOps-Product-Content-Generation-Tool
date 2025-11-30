@@ -2,30 +2,95 @@ import React, { useState, useEffect } from 'react';
 import { AppView } from './types';
 import { SingleUrlProcessor } from './components/SingleUrlProcessor';
 import { BulkUrlProcessor } from './components/BulkUrlProcessor';
-import { Link as LinkIcon, Layers, Bot, Sparkles } from 'lucide-react';
+import { Link as LinkIcon, Layers, Bot, Sparkles, Settings, Key, X, ExternalLink, AlertTriangle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
   const [showIntro, setShowIntro] = useState(true);
   const [introOpacity, setIntroOpacity] = useState(1);
+  
+  // API Key Management
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [keyError, setKeyError] = useState('');
 
-  // Intro Animation Logic
+  // Initial Checks
   useEffect(() => {
-    // Start fading out after 2 seconds
+    // Intro Animation
     const fadeTimer = setTimeout(() => {
       setIntroOpacity(0);
     }, 2000);
-
-    // Remove from DOM after 2.5 seconds (fade duration)
     const removeTimer = setTimeout(() => {
       setShowIntro(false);
     }, 2500);
+
+    // Check for API Key
+    const storedKey = localStorage.getItem('gemini_api_key');
+    if (storedKey) {
+      setApiKey(storedKey);
+    } else {
+      // If no key found in local storage, prompt user
+      setShowApiKeyModal(true);
+    }
 
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(removeTimer);
     };
   }, []);
+
+  const validateApiKey = (key: string): boolean => {
+    // Basic Google API Key validation: starts with AIza and is roughly 39 chars long
+    // We'll be slightly lenient on length but strict on prefix
+    return key.trim().startsWith('AIza') && key.trim().length > 30;
+  };
+
+  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setApiKey(value);
+
+    // Clear error if empty to avoid annoying initial state, 
+    // but if they backspace to empty, it's fine to clear.
+    if (!value.trim()) {
+      setKeyError('');
+      return;
+    }
+
+    // Real-time validation feedback
+    if (!value.trim().startsWith('AIza')) {
+      setKeyError('Invalid format. Google API Keys must start with "AIza".');
+    } else if (value.trim().length <= 30) {
+      // Show warning for length, but maybe user is still typing/pasting
+      setKeyError('Key appears to be too short.');
+    } else {
+      setKeyError('');
+    }
+  };
+
+  const handleSaveApiKey = (key: string) => {
+    // Final check before saving
+    const trimmedKey = key.trim();
+
+    if (!trimmedKey) {
+      setKeyError('API Key cannot be empty.');
+      return;
+    }
+
+    if (!validateApiKey(trimmedKey)) {
+      // Ensure we catch cases where real-time didn't trigger or was ignored
+      if (!trimmedKey.startsWith('AIza')) {
+         setKeyError('Invalid API Key format. Must start with "AIza".');
+      } else {
+         setKeyError('Invalid API Key. Length is too short.');
+      }
+      return;
+    }
+
+    localStorage.setItem('gemini_api_key', trimmedKey);
+    setApiKey(trimmedKey);
+    setKeyError('');
+    setShowApiKeyModal(false);
+  };
 
   const renderContent = () => {
     switch (currentView) {
@@ -60,6 +125,80 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-[110] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-in zoom-in duration-300">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <Key className="text-indigo-500" size={20} /> Configure Gemini API
+              </h3>
+              {/* Allow closing if a key exists in state (even if not saved yet, but assuming user cancels edit) */}
+              {/* Only allow closing if a valid key is already saved in localStorage, otherwise force entry */}
+              {localStorage.getItem('gemini_api_key') && (
+                <button 
+                  onClick={() => { 
+                    setShowApiKeyModal(false); 
+                    setKeyError(''); 
+                    // Reset to stored key if cancelled
+                    setApiKey(localStorage.getItem('gemini_api_key') || '');
+                  }} 
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+            
+            <p className="text-slate-600 text-sm mb-6">
+              To use ContentTransformer, you need your own Google Gemini API Key. 
+              The key is stored securely in your browser's local storage.
+            </p>
+
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveApiKey(apiKey); }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Gemini API Key</label>
+                  <input 
+                    type="password" 
+                    required
+                    placeholder="AIzaSy..."
+                    className={`w-full px-4 py-3 rounded-lg border focus:ring-2 outline-none transition-all font-mono text-sm ${keyError ? 'border-red-300 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-100'}`}
+                    value={apiKey}
+                    onChange={handleApiKeyChange}
+                  />
+                  {keyError && (
+                    <div className="flex items-center gap-1 text-red-500 text-xs mt-2 animate-in slide-in-from-top-1 font-medium">
+                      <AlertTriangle size={12} />
+                      <span>{keyError}</span>
+                    </div>
+                  )}
+                </div>
+                
+                <button 
+                  type="submit" 
+                  disabled={!!keyError || !apiKey}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition-all"
+                >
+                  Save API Key
+                </button>
+
+                <div className="text-center">
+                  <a 
+                    href="https://aistudio.google.com/app/apikey" 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-xs text-indigo-500 hover:text-indigo-600 hover:underline flex items-center justify-center gap-1"
+                  >
+                    Get a free API Key here <ExternalLink size={12} />
+                  </a>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -73,20 +212,35 @@ const App: React.FC = () => {
             <span className="font-bold text-xl text-slate-800 tracking-tight">ContentTransformer</span>
           </div>
 
-          <nav className="flex items-center gap-1">
-            <NavButton 
-              active={currentView === AppView.SINGLE} 
-              onClick={() => setCurrentView(AppView.SINGLE)}
-              icon={<LinkIcon size={18} />}
-              label="Single URL"
-            />
-            <NavButton 
-              active={currentView === AppView.BULK} 
-              onClick={() => setCurrentView(AppView.BULK)}
-              icon={<Layers size={18} />}
-              label="Bulk Processing"
-            />
-          </nav>
+          <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-1">
+              <NavButton 
+                active={currentView === AppView.SINGLE} 
+                onClick={() => setCurrentView(AppView.SINGLE)}
+                icon={<LinkIcon size={18} />}
+                label="Single URL"
+              />
+              <NavButton 
+                active={currentView === AppView.BULK} 
+                onClick={() => setCurrentView(AppView.BULK)}
+                icon={<Layers size={18} />}
+                label="Bulk Processing"
+              />
+            </nav>
+            <div className="h-6 w-px bg-slate-200 mx-2"></div>
+            <button 
+              onClick={() => { 
+                setShowApiKeyModal(true); 
+                setKeyError(''); 
+                // Populate with existing key for editing
+                setApiKey(localStorage.getItem('gemini_api_key') || '');
+              }}
+              className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+              title="API Key Settings"
+            >
+              <Settings size={20} />
+            </button>
+          </div>
         </div>
       </header>
 
