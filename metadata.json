@@ -1,0 +1,5 @@
+{
+  "name": "ContentTransformer AI",
+  "description": "An intelligent web content extraction and AI-powered transformation platform. Extract content from single URLs or bulk lists, and transform it using Gemini AI into structured formats.",
+  "requestFramePermissions": []
+}
