@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 // Initialize the client. 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Using Gemini 2.5 Flash - The current state-of-the-art for high-speed, high-accuracy text processing.
 const MODEL_NAME = 'gemini-2.5-flash';
 
 /**
@@ -60,20 +61,28 @@ export const transformContent = async (
     // Logic to determine strictness of template following
     if (sampleFileContent) {
         transformationInstructions = `
-        CONTEXT: The user has provided a SAMPLE FILE CONTENT (below) to define the exact output format.
-        TASK: Extract data from the Source Content and format it EXACTLY like the Sample File.
+        ### CRITICAL: SAMPLE FILE MAPPING
+        The user has provided a SAMPLE FILE (below). You act as a migration engine.
+        Your ONLY Goal: Map the "Source Content" into the EXACT structure of the "Sample File".
         
+        - If Sample is CSV: output ONLY CSV rows matching headers.
+        - If Sample is JSON: output ONLY valid JSON matching keys.
+        - If Sample is Text/List: Match the tone, bullet style, and spacing exactly.
+
         --- SAMPLE FILE START ---
         ${sampleFileContent.substring(0, 10000)}
         --- SAMPLE FILE END ---
         
-        USER NOTES:
-        ${userPrompt || "Follow the sample file structure precisely. Do not deviate from the columns/keys."}
+        ### USER CONFIGURATION NOTES:
+        "${userPrompt || "Follow the sample file structure precisely."}"
         `;
     } else {
         // If no sample file, ensure the user prompt is treated as the absolute source of truth
         transformationInstructions = `
-        TASK: Transform the Source Content according to these instructions:
+        ### CRITICAL: USER CONFIGURATION
+        The user has provided the following specific prompt. Follow it to the letter.
+        
+        USER PROMPT:
         "${userPrompt || "Clean up the content, remove navigation/footer noise, and format it professionally."}"
         
         FORMATTING RULES:
@@ -85,35 +94,32 @@ export const transformContent = async (
     }
 
     const fullPrompt = `
-      You are a professional Content Editor and Data Extraction Engine.
-      Your goal is to produce a "Final Polish" version of the content that is ready to be copy-pasted directly into a final report, CMS, or Excel sheet.
+      You are an elite AI Data Processor powered by Gemini 2.5.
+      Your task is to transform raw web content into a perfectly formatted final deliverable.
 
-      --- SOURCE CONTENT ---
+      --- SOURCE CONTENT (Scraped) ---
       ${content.substring(0, 30000)} ${content.length > 30000 ? '...(truncated)' : ''}
       --- END SOURCE CONTENT ---
       
       --- INSTRUCTIONS ---
       ${transformationInstructions}
       
-      --- STRICT OUTPUT RULES (CRITICAL) ---
-      1. **Final Deliverable Only**: Output ONLY the result. Do NOT include conversational filler like "Here is the transformed text", "Sure", "Output:", "Based on your request...".
-      2. **No Markdown Fences**: If the user asks for CSV or JSON, return RAW text. Do NOT wrap it in \`\`\`csv or \`\`\`json. 
-      3. **Whitespace Control**: 
-         - Remove all leading and trailing whitespace.
-         - Remove unrequested "Title:" headers at the top. Start directly with the content.
-         - Ensure consistent spacing between paragraphs (max 1 blank line).
-      4. **Cleanliness**: 
-         - ${isMarkdownRequested ? "Keep markdown syntax." : "REMOVE all **bold** markers, ## header markers, and __italics__ markers. The output must be clean text."}
-      5. **No Hallucination**: Do not invent data not present in the Source Content.
+      --- QUALITY ASSURANCE RULES ---
+      1. **Zero Fluff**: Do not say "Here is the data". Start immediately with the output.
+      2. **Data Integrity**: Do not make up facts. If a field from the sample file isn't found in the source, leave it blank or write "N/A".
+      3. **Clean Output**: 
+         - Trim all leading/trailing whitespace.
+         - Ensure the output looks like it was written by a human expert.
+         - ${isMarkdownRequested ? "Keep structure." : "STRIP all markdown symbols (**bold**, ## header)."}
       
-      Begin generation:
+      GENERATE FINAL OUTPUT:
     `;
 
     const response = await ai.models.generateContent({
       model: modelName,
       contents: fullPrompt,
       config: {
-        temperature: 0.2, // Low temperature for high adherence to structure
+        temperature: 0.1, // Minimal creativity, maximum adherence to rules
       }
     });
 

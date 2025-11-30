@@ -1,11 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppView } from './types';
 import { SingleUrlProcessor } from './components/SingleUrlProcessor';
 import { BulkUrlProcessor } from './components/BulkUrlProcessor';
-import { LayoutGrid, Link as LinkIcon, Layers, Settings, Bot } from 'lucide-react';
+import { Link as LinkIcon, Layers, Bot, Sparkles } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
+  const [showIntro, setShowIntro] = useState(true);
+  const [introOpacity, setIntroOpacity] = useState(1);
+
+  // Intro Animation Logic
+  useEffect(() => {
+    // Start fading out after 2 seconds
+    const fadeTimer = setTimeout(() => {
+      setIntroOpacity(0);
+    }, 2000);
+
+    // Remove from DOM after 2.5 seconds (fade duration)
+    const removeTimer = setTimeout(() => {
+      setShowIntro(false);
+    }, 2500);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(removeTimer);
+    };
+  }, []);
 
   const renderContent = () => {
     switch (currentView) {
@@ -20,15 +40,34 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col relative overflow-hidden">
+      
+      {/* Intro Overlay */}
+      {showIntro && (
+        <div 
+          className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center transition-opacity duration-700 ease-in-out"
+          style={{ opacity: introOpacity }}
+        >
+          <div className="text-center animate-pulse">
+            <h1 className="text-5xl md:text-7xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400 tracking-tighter">
+              Hi Team FOps
+            </h1>
+            <div className="mt-4 flex justify-center gap-2 text-slate-400">
+               <Sparkles className="animate-spin text-yellow-400" size={24} />
+               <span className="text-lg">Initializing Workspace...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div 
-            className="flex items-center gap-2 cursor-pointer" 
+            className="flex items-center gap-2 cursor-pointer group" 
             onClick={() => setCurrentView(AppView.HOME)}
           >
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white group-hover:rotate-12 transition-transform">
               <Bot size={20} />
             </div>
             <span className="font-bold text-xl text-slate-800 tracking-tight">ContentTransformer</span>
@@ -58,8 +97,10 @@ const App: React.FC = () => {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-8">
-        <div className="max-w-7xl mx-auto px-6 text-center text-slate-400 text-sm">
-          <p>© 2024 ContentTransformer AI. Powered by Gemini.</p>
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <p className="text-slate-500 text-sm font-medium">
+            @2025 made for Fops team CK by BK Product, Keep Hustling.
+          </p>
         </div>
       </footer>
     </div>
@@ -71,7 +112,7 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
     onClick={onClick}
     className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${
       active 
-        ? 'bg-indigo-50 text-indigo-700' 
+        ? 'bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-100' 
         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
     }`}
   >
@@ -82,10 +123,13 @@ const NavButton: React.FC<{ active: boolean; onClick: () => void; icon: React.Re
 
 const HomeDashboard: React.FC<{ setView: (view: AppView) => void }> = ({ setView }) => {
   return (
-    <div className="max-w-5xl mx-auto text-center space-y-12 animate-in fade-in duration-700">
+    <div className="max-w-5xl mx-auto text-center space-y-12 animate-in fade-in zoom-in duration-700">
       <div className="space-y-4 pt-10">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold uppercase tracking-wider mb-2">
+           <Sparkles size={12} /> Production Ready
+        </div>
         <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight">
-          Transform the Web with <span className="text-indigo-600">AI</span>
+          Transform the Web with <span className="text-indigo-600">Gemini 2.5</span>
         </h1>
         <p className="text-xl text-slate-500 max-w-2xl mx-auto leading-relaxed">
           Extract content from any URL and transform it into JSON, Summaries, or Social Posts using intelligent prompts.
@@ -111,7 +155,7 @@ const HomeDashboard: React.FC<{ setView: (view: AppView) => void }> = ({ setView
 
       <div className="pt-8 grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-4xl mx-auto">
          <StatItem value="1.5s" label="Avg Extraction Time" />
-         <StatItem value="99.9%" label="Accuracy with Gemini 2.5" />
+         <StatItem value="100%" label="Prompt Adherence" />
          <StatItem value="Unlimited" label="Output Formats" />
       </div>
     </div>
@@ -135,7 +179,7 @@ const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; desc: string
 );
 
 const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) => (
-  <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm text-center">
+  <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm text-center transform hover:-translate-y-1 transition-transform duration-300">
     <div className="text-3xl font-bold text-indigo-600 mb-1">{value}</div>
     <div className="text-sm text-slate-500 font-medium uppercase tracking-wider">{label}</div>
   </div>
